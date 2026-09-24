@@ -15,13 +15,12 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from langchain_community.vectorstores import FAISS
+from langchain_pinecone import PineconeVectorStore
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Load .env from the same folder as this file, regardless of where the
@@ -29,10 +28,14 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 # exists but isn't picked up because of the current working directory.
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
-INDEX_DIR = "faiss_index"
-EMBEDDING_MODEL = "models/text-embedding-004"
+# gemini-embedding-001 replaced the deprecated text-embedding-004 /
+# embedding-001 models (Google retired those). Must match ingest.py exactly,
+# including EMBEDDING_DIM below — otherwise queries and the stored vectors
+# will not be comparable and retrieval will silently return junk (or error).
+EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_DIM = 3072
 
-MAX_ANSWER_TOKENS = 300  # cap response length (also saves quota)
+MAX_ANSWER_TOKENS = 400  # cap response length (also saves quota)
 
 # Response length presets (word-target used in the prompt; token cap enforced separately)
 LENGTH_PRESETS = {
@@ -43,7 +46,7 @@ LENGTH_PRESETS = {
 
 # Persona framing: gives the model a consistent identity/tone.
 PERSONA = (
-    "You are Assist, thpe official virtual suport assistant for this company's "
+    "You are Assist, the official virtual support assistant for this company's "
     "ERP system. You are professional, clear, and friendly — like a knowledgeable "
     "support agent who wants the user to succeed quickly."
 )
@@ -88,19 +91,37 @@ REFUSAL_GENERAL = (
 
 
 class RAGEngine:
-    def __init__(self, index_dir: str = INDEX_DIR, k: int = 4):
-        if not os.path.isdir(index_dir):
-            raise FileNotFoundError(
-                f"No FAISS index found at '{index_dir}/'. "
-                "Run `python ingest.py` first to build it."
+    def __init__(self, k: int = 4):
+        pinecone_api_key = os.getenv("PINECONE_API_KEY", "").strip()
+        pinecone_index_name = os.getenv("PINECONE_INDEX_NAME", "erp-faq-index").strip()
+
+        if not pinecone_api_key:
+            raise EnvironmentError(
+                "PINECONE_API_KEY not set. Add it to your .env file (local) "
+                "or your Render Environment tab (production)."
+            )
+
+        gemini_key_for_embeddings = os.getenv("GEMINI_API_KEY", "").strip()
+        if not gemini_key_for_embeddings:
+            raise EnvironmentError(
+                "GEMINI_API_KEY not set. It's required for embeddings even if "
+                "you're using Groq/OpenRouter as your chat LLM, since queries "
+                "must be embedded with the same model used in ingest.py."
             )
 
         embeddings = GoogleGenerativeAIEmbeddings(
             model=EMBEDDING_MODEL,
-             google_api_key=os.getenv("GEMINI_API_KEY"),
-            )
-        self.vectorstore = FAISS.load_local(
-            index_dir, embeddings, allow_dangerous_deserialization=True
+            google_api_key=gemini_key_for_embeddings,
+            output_dimensionality=EMBEDDING_DIM,
+        )
+
+        # Connects to the existing Pinecone index built by ingest.py.
+        # Does NOT create or upload anything here — this is read-only access
+        # at query time.
+        self.vectorstore = PineconeVectorStore(
+            index_name=pinecone_index_name,
+            embedding=embeddings,
+            pinecone_api_key=pinecone_api_key,
         )
         self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
 
@@ -195,7 +216,15 @@ class RAGEngine:
             ]
         )
 
-        retrieved_docs = self.retriever.invoke(question)
+        try:
+            retrieved_docs = self.retriever.invoke(question)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to retrieve context from Pinecone: {e}. "
+                "Check that PINECONE_INDEX_NAME matches an existing index, "
+                "and that its dimension matches EMBEDDING_DIM in this file."
+            ) from e
+
         context = self._format_docs(retrieved_docs)
 
         last_error = None
