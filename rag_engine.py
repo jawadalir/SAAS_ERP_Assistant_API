@@ -22,6 +22,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Load .env from the same folder as this file, regardless of where the
 # script/Streamlit is actually run from. This fixes cases where .env
