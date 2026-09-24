@@ -12,6 +12,7 @@ Usage:
 """
 
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -35,7 +36,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIM = 3072
 
-MAX_ANSWER_TOKENS = 400  # cap response length (also saves quota)
+MAX_ANSWER_TOKENS = 300  # cap response length (also saves quota)
 
 # Response length presets (word-target used in the prompt; token cap enforced separately)
 LENGTH_PRESETS = {
@@ -66,6 +67,11 @@ by the user's question.
 {refusal_instructions}
 
 {length_instruction}
+
+Write your answer as plain text only. Do not use Markdown formatting of any
+kind: no asterisks for bold or italics, no pound signs for headings, no
+backticks. If you need to list steps, write them as plain numbered lines
+(e.g. "1. Do this") rather than Markdown bullet or numbered list syntax.
 
 Context:
 {context}
@@ -186,6 +192,27 @@ class RAGEngine:
     def _format_docs(docs) -> str:
         return "\n\n---\n\n".join(d.page_content for d in docs)
 
+    @staticmethod
+    def _strip_markdown(text: str) -> str:
+        """
+        Removes common Markdown formatting the model might still slip in
+        despite being instructed to avoid it, so the API always returns
+        clean plain text.
+        """
+        # Bold / italic: **text**, __text__, *text*, _text_
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+        text = re.sub(r"__(.+?)__", r"\1", text)
+        text = re.sub(r"\*(.+?)\*", r"\1", text)
+        text = re.sub(r"_(.+?)_", r"\1", text)
+        # Headings: leading #, ##, ### etc.
+        text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+        # Inline code / code fences
+        text = re.sub(r"```.*?```", lambda m: m.group(0).strip("`"), text, flags=re.DOTALL)
+        text = text.replace("`", "")
+        # Markdown bullet markers ("- item", "* item") -> plain dash
+        text = re.sub(r"^\s*[-*]\s+", "- ", text, flags=re.MULTILINE)
+        return text.strip()
+
     def ask(self, question: str, length: str = "medium", mode: str = "general"):
         """
         Returns (answer: str, sources: list[dict]).
@@ -243,6 +270,8 @@ class RAGEngine:
             raise RuntimeError(
                 f"All configured LLM providers failed. Last error: {last_error}"
             )
+
+        answer = self._strip_markdown(answer)
 
         # Hard cap as a final safety net in case a provider ignores
         # max_tokens/max_output_tokens.
