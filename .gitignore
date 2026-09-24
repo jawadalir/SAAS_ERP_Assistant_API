@@ -16,6 +16,6 @@ ingest.py
 # VS Code
 .vscode/
 
-faiss_index/
+faiss_index
 app.py
 data
