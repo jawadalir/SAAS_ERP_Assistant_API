@@ -1,5 +1,5 @@
-langchain
-langchain-community
+langchain==0.3.7
+langchain-community==0.3.7
 langchain-groq==0.2.1
 langchain-text-splitters==0.3.2
 faiss-cpu
@@ -10,7 +10,7 @@ docx2txt==0.8
 pytesseract==0.3.13
 Pillow==11.0.0
 pypdf==5.1.0
-langchain-core
+langchain-core==0.3.86
 langchain-google-genai==2.0.4
 langchain-openai==0.2.9
 
