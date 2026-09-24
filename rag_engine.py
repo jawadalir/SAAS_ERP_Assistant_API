@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -30,7 +29,7 @@ from langchain_core.runnables import RunnablePassthrough
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 INDEX_DIR = "faiss_index"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "models/text-embedding-004"
 
 MAX_ANSWER_TOKENS = 300  # cap response length (also saves quota)
 
@@ -95,7 +94,10 @@ class RAGEngine:
                 "Run `python ingest.py` first to build it."
             )
 
-        embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=EMBEDDING_MODEL,
+             google_api_key=os.getenv("GEMINI_API_KEY"),
+            )
         self.vectorstore = FAISS.load_local(
             index_dir, embeddings, allow_dangerous_deserialization=True
         )
