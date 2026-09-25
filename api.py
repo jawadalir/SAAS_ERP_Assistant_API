@@ -15,6 +15,7 @@ Then call it, e.g. from PHP/JS, as:
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import os
 
 from rag_engine import RAGEngine
 
@@ -67,3 +68,11 @@ def ask(payload: AskRequest):
         return {"answer": answer, "sources": sources}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate answer: {e}")
+
+    
+@app.post("/cron/run-task")
+async def run_task(x_cron_secret: str = Header(None)):
+    if x_cron_secret != os.getenv("CRON_SECRET"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    # your scheduled logic here
+    return {"status": "ok"}
