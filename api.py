@@ -12,7 +12,7 @@ Then call it, e.g. from PHP/JS, as:
     Body (JSON): {"question": "...", "length": "medium", "mode": "general"}
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import os
@@ -69,7 +69,7 @@ def ask(payload: AskRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate answer: {e}")
 
-    
+
 @app.post("/cron/run-task")
 async def run_task(x_cron_secret: str = Header(None)):
     if x_cron_secret != os.getenv("CRON_SECRET"):
