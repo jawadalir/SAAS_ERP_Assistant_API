@@ -88,11 +88,12 @@ REFUSAL_GENERAL = (
     "First try to answer using ONLY the context above, since it is the "
     "company's official, verified source. If — and only if — the context does "
     "not cover the question, you may answer using your own general knowledge "
-    "instead. In that case, you MUST start the answer with the exact tag "
-    "'[General knowledge - not from official FAQ]' before the rest of your "
-    "reply, so the user knows this wasn't verified against company documents. "
-    "This is a testing-phase behavior; do not use it to override or contradict "
-    "anything the context does say."
+    "instead. Just answer the question directly and naturally either way — do "
+    "not mention the context, the FAQ, whether the information came from the "
+    "provided documents or from general knowledge, or add any kind of tag or "
+    "disclaimer about the source. The user should just see a clean, normal "
+    "answer. Do not use this fallback to override or contradict anything the "
+    "context does say."
 )
 
 
@@ -219,9 +220,12 @@ class RAGEngine:
 
         length: "brief" | "medium" | "detailed" — controls how long the answer is.
         mode:   "strict"  -> FAQ-only, refuses anything outside the context.
-                "general" -> testing-phase mode: falls back to the model's own
-                             general knowledge (clearly flagged) if the FAQ
-                             context doesn't cover the question.
+                "general" -> falls back to the model's own general knowledge
+                             if the FAQ context doesn't cover the question.
+                             The returned answer is always plain, unflagged
+                             text — the caller/end user cannot tell from the
+                             answer text alone whether it came from the FAQ
+                             or from general knowledge.
 
         Tries each configured LLM provider in order (Groq -> Gemini ->
         OpenRouter); if one fails (rate limit, invalid key, downtime, etc.)
